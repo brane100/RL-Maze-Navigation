@@ -63,6 +63,17 @@ class MazeEnv:
 
         truncated = self.steps >= self.max_steps
         return self.agent_pos, reward, done or truncated
+    
+    def render(self):
+        for r in range(self.rows):
+            line = []
+            for c in range(self.cols):
+                if (r, c) == self.agent_pos:
+                    line.append('A')
+                else:
+                    line.append(self.grid[r][c])
+            print(''.join(line))
+        print()
 
 
 def load_maze(path, max_steps=500):
