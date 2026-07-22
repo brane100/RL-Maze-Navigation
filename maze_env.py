@@ -34,27 +34,11 @@ class MazeEnv:
         return [(r, c) for r in range(self.rows)
                 for c in range(self.cols) if not self.is_wall(r, c)]
 
-
-def load_maze(path, max_steps=500):
-    rows = []
-    with open(path) as f:
-        for line in f:
-            cleaned = ''.join(ch for ch in line if not ch.isspace())
-            if cleaned:
-                rows.append(cleaned)
-
-    width = len(rows[0])
-    for i, row in enumerate(rows):
-        if len(row) != width:
-            raise ValueError(f"row {i} has length {len(row)}, expected {width}")
-
-    return MazeEnv(rows, max_steps=max_steps)
-
     def reset(self):
         self.agent_pos = self.start
         self.steps = 0
         return self.agent_pos
-    
+
     ACTIONS = {0: (-1, 0), 1: (1, 0), 2: (0, -1), 3: (0, 1)}  # up, down, left, right
 
     REWARD_GOAL = 10.0
@@ -79,6 +63,7 @@ def load_maze(path, max_steps=500):
 
         truncated = self.steps >= self.max_steps
         return self.agent_pos, reward, done or truncated
+
 
 def load_maze(path, max_steps=500):
     rows = []
