@@ -49,3 +49,8 @@ def load_maze(path, max_steps=500):
             raise ValueError(f"row {i} has length {len(row)}, expected {width}")
 
     return MazeEnv(rows, max_steps=max_steps)
+
+    def reset(self):
+        self.agent_pos = self.start
+        self.steps = 0
+        return self.agent_pos
