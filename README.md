@@ -12,7 +12,7 @@ The agent has no previous knowledge of the maze. It learns from the transitions 
 
 **Action:** One of the four possible movements: up, down, left, or right.
 
-**Reward:** A scalar value received after taking an action. Reaching the goal yields a positive reward. Each step incurs a cost of −0.1. Colliding with walls carries a penalty of −1.0.
+**Reward:** A scalar value received after taking an action. Reaching the goal yields a positive reward. Each step incurs a cost of −0.01. Colliding with walls carries a penalty of −0.1.
 
 **Next State:** The resulting state after the action is executed, representing the agent's updated position and observation of the environment.
 

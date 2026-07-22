@@ -54,3 +54,43 @@ def load_maze(path, max_steps=500):
         self.agent_pos = self.start
         self.steps = 0
         return self.agent_pos
+    
+    ACTIONS = {0: (-1, 0), 1: (1, 0), 2: (0, -1), 3: (0, 1)}  # up, down, left, right
+
+    REWARD_GOAL = 10.0
+    REWARD_STEP = -0.01
+    REWARD_WALL = -0.1
+
+    def step(self, action):
+        self.steps += 1
+        dr, dc = self.ACTIONS[action]
+        r, c = self.agent_pos
+        nr, nc = r + dr, c + dc
+
+        if self.is_wall(nr, nc):
+            reward = self.REWARD_STEP + self.REWARD_WALL
+        else:
+            self.agent_pos = (nr, nc)
+            reward = self.REWARD_STEP
+
+        done = self.agent_pos == self.goal
+        if done:
+            reward += self.REWARD_GOAL
+
+        truncated = self.steps >= self.max_steps
+        return self.agent_pos, reward, done or truncated
+
+def load_maze(path, max_steps=500):
+    rows = []
+    with open(path) as f:
+        for line in f:
+            cleaned = ''.join(ch for ch in line if not ch.isspace())
+            if cleaned:
+                rows.append(cleaned)
+
+    width = len(rows[0])
+    for i, row in enumerate(rows):
+        if len(row) != width:
+            raise ValueError(f"row {i} has length {len(row)}, expected {width}")
+
+    return MazeEnv(rows, max_steps=max_steps)
