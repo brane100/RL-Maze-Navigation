@@ -1,4 +1,24 @@
 import heapq
+import os
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import numpy as np
+
+
+def unique_path(path):
+    """
+    'results/rewards.png' -> 'results/rewards.png' if free,
+    otherwise 'results/rewards_1.png', 'results/rewards_2.png', ...
+    """
+    if not os.path.exists(path):
+        return path
+
+    base, ext = os.path.splitext(path)
+    counter = 1
+    while os.path.exists(f"{base}_{counter}{ext}"):
+        counter += 1
+    return f"{base}_{counter}{ext}"
 
 def astar(env):
     """
@@ -88,3 +108,47 @@ if __name__ == "__main__":
     path, length = astar(env)
     print("Optimal length:", length)
     print("Path:", path)
+
+# ---------- plotting ----------
+
+def moving_average(values, window=50):
+    if len(values) < window:
+        return np.array(values, dtype=float)
+    return np.convolve(values, np.ones(window) / window, mode='valid')
+
+
+def _curve(values, ylabel, title, filename, window, hline=None, hlabel=None):
+    smoothed = moving_average(values, window)
+
+    plt.figure(figsize=(8, 5))
+    plt.plot(values, alpha=0.3, label="raw")
+    plt.plot(range(len(values) - len(smoothed), len(values)),
+              smoothed, linewidth=2, label=f"moving avg ({window})")
+
+    if hline is not None:
+        plt.axhline(hline, linestyle='--', color='red', label=hlabel)
+
+    plt.xlabel("Episode")
+    plt.ylabel(ylabel)
+    plt.title(title)
+    plt.legend()
+    plt.grid(alpha=0.3)
+
+    out = unique_path(filename)
+    os.makedirs(os.path.dirname(out) or '.', exist_ok=True)
+    plt.savefig(out, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"saved {out}")
+    return out
+
+
+def plot_rewards(rewards, title="Total reward per episode",
+                 filename="results/rewards.png", window=50):
+    return _curve(rewards, "Total reward", title, filename, window)
+
+
+def plot_steps(steps, optimal=None, title="Steps to goal per episode",
+               filename="results/steps.png", window=50):
+    return _curve(steps, "Steps", title, filename, window,
+                  hline=optimal,
+                  hlabel=f"A* optimum ({optimal})" if optimal is not None else None)
