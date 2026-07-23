@@ -19,11 +19,11 @@ class MazeEnv:
         self.steps = 0
 
     def _find(self, char):
-        for r in range(self.rows):
-            for c in range(self.cols):
-                if self.grid[r][c] == char:
-                    return (r, c)
-        return None
+        found = [(r, c) for r in range(self.rows) for c in range(self.cols)
+                 if self.grid[r][c] == char]
+        if len(found) != 1:
+            return None
+        return found[0]
 
     def is_wall(self, r, c):
         if r < 0 or r >= self.rows or c < 0 or c >= self.cols:
@@ -62,7 +62,7 @@ class MazeEnv:
             reward += self.REWARD_GOAL
 
         truncated = self.steps >= self.max_steps
-        return self.agent_pos, reward, done or truncated
+        return self.agent_pos, reward, done, truncated
     
     def render(self):
         for r in range(self.rows):
@@ -74,7 +74,6 @@ class MazeEnv:
                     line.append(self.grid[r][c])
             print(''.join(line))
         print()
-
 
 def load_maze(path, max_steps=500):
     rows = []
