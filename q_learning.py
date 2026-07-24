@@ -56,3 +56,51 @@ def update(self, state, action, reward, next_state, done):
 
 def decay_epsilon(self):
     self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
+
+def train(self, env, episodes=1000):
+    """Run many episodes, learning as it goes. Returns per-episode logs."""
+    reward_history = []
+    step_history = []
+
+    for episode in range(episodes):
+        state = env.reset()
+        total_reward = 0.0
+
+        while True:
+            action = self.choose_action(state)
+            next_state, reward, done, truncated = env.step(action)
+
+            self.update(state, action, reward, next_state, done)
+
+            state = next_state
+            total_reward += reward
+
+            if done or truncated:
+                break
+
+        self.decay_epsilon()
+        reward_history.append(total_reward)
+        step_history.append(env.steps)
+
+
+    return reward_history, step_history
+
+
+def greedy_path(self, env, max_length=1000):
+    """
+    Follow the learned policy with no exploration.
+    Returns (path, length) or (None, None) if it fails to reach the goal.
+    """
+    state = env.reset()
+    path = [state]
+
+    for _ in range(max_length):
+        action = self.best_action(state)
+        state, reward, done, truncated = env.step(action)
+        path.append(state)
+        if done:
+            return path, len(path) - 1
+        if truncated:
+            break
+
+    return None, None
