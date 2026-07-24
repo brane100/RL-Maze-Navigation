@@ -35,3 +35,24 @@ class QLearningAgent:
         best = max(values)
         candidates = [i for i, v in enumerate(values) if v == best]
         return random.choice(candidates)
+
+def update(self, state, action, reward, next_state, done):
+    """
+    Q-learning update:
+        Q(s, a) <- Q(s, a) + alpha * (target - Q(s, a))
+    where target = reward + gamma * max_a' Q(s', a')
+
+    If the episode truly ended at the goal there is no future,
+    so the target is just the reward.
+    """
+    current = self.Q[state][action]
+
+    if done:
+        target = reward
+    else:
+        target = reward + self.gamma * max(self.Q[next_state])
+
+    self.Q[state][action] = current + self.alpha * (target - current)
+
+def decay_epsilon(self):
+    self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
