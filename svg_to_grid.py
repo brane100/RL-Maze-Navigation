@@ -52,10 +52,10 @@ def _parse_lines(svg_text):
  
     return segments
 
-def _infer_cell_size(segments)
+def _infer_cell_size(segments):
     """From the spacing of coordinates that appear."""
-    xs = sorted(set(round(c, 2) for x1, y2, x2, y2 in segments for c in (x1, x2)))
-    ys = sorted(set(round(c, 2) for x1, y2, x2, y2 in segments for c in (y1, y2)))
+    xs = sorted(set(round(c, 2) for x1, y1, x2, y2 in segments for c in (x1, x2)))
+    ys = sorted(set(round(c, 2) for x1, y1, x2, y2 in segments for c in (y1, y2)))
 
     def min_gap(vals):
         gaps = [b - a for a, b in zip(vals, vals[1:]) if b - a >  0.5]
