@@ -101,7 +101,7 @@ def carve_maze(rows: int, cols: int, rnd: random.Random):
     """
     
     grid = make_blank_grid(rows, cols)
-    start = (0, random.randrange(cols))  # start at a random cell in the first row
+    start = (0, rnd.randrange(cols))  # start at a random cell in the first row
     visited = {start}
 
     sr, sc = cell_to_physical(*start)
@@ -118,7 +118,7 @@ def carve_maze(rows: int, cols: int, rnd: random.Random):
             visited.add((nr, nc))
 
             # Carve the neighbor cell
-            pr, pc = cell_to_physical(nr, nc)
+            pr, pc = cell_to_physical(r, c)
             pnr, pnc = cell_to_physical(nr, nc)
             wall_r, wall_c = (pr + pnr) // 2, (pc + pnc) // 2
             

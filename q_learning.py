@@ -104,38 +104,3 @@ class QLearningAgent:
                 break
 
         return None, None
-
-
-
-if __name__ == "__main__":
-    from maze_env import MazeEnv
-    from utils import astar
-    maze = [
-        "S..#...",
-        ".#.#.#.",
-        ".#...#.",
-        ".####.#",
-        ".....#.",
-        ".###...",
-        "....#.G",
-    ]
-    env = MazeEnv(maze, max_steps=200)
-    _, optimal = astar(env)
-    print("A* optimal:", optimal)
-    agent = QLearningAgent()
-    rewards, steps = agent.train(env, episodes=1000)
-    print("first 5 episodes (steps):", steps[:5])
-    print("last 5 episodes (steps):", steps[-5:])
-    print("final epsilon:", round(agent.epsilon, 4))
-    path, length = agent.greedy_path(env)
-    print("greedy path length:", length)
-    print("matches optimal?", length == optimal)
-
-
-    """
-    For the report:
-    Q-learning, using the temporal-difference error, updates the table of the expected reward that
-    it keeps, for every state-action pair, after each move. It stays small enough, because it
-    is 7×7 maze that has only 33 free cells, for the agent to revisit every state many times during
-    training. After 1000 episodes the greedy policy reached the goal in 12 moves, matching what A* found.
-    """
