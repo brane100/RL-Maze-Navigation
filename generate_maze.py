@@ -1,4 +1,8 @@
-"""
+import argparse
+import random
+from collections import deque
+
+r"""
 generate_maze.py — generate random, solvable mazes and save them as text
 files compatible with run_custom.py's load_maze().
 
@@ -12,11 +16,6 @@ Usage:
 
 TODO markers below mark the parts left for you to implement.
 """
-
-import argparse
-import random
-from collections import deque
-
 
 # --------------------------------------------------------------------------
 # Step 1: Grid representation
@@ -203,7 +202,7 @@ def main():
     with open(args.out, "w", encoding="utf-8") as f:
         f.write(text + "\n")
 
-    print(f"Wrote {args.rows}x{args.cols}-cell maze (seed={seed}) to {args.out}")
+    # print(f"Wrote {args.rows}x{args.cols}-cell maze (seed={seed}) to {args.out}")
     print(text)
 
 
