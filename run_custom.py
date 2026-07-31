@@ -1,10 +1,25 @@
 import argparse
 import os
 import sys
+import time
 
 from maze_env import load_maze
 from q_learning import QLearningAgent
 from utils import astar, plot_steps, plot_rewards
+
+
+def clear_screen():
+    os.system("cls" if os.name == "nt" else "clear")
+
+
+def animate_path(env, path, delay):
+    """Replay a sequence of (row, col) states in the terminal, one frame per move."""
+    for step, state in enumerate(path):
+        clear_screen()
+        env.agent_pos = state
+        print(f"step {step}/{len(path) - 1}")
+        env.render()
+        time.sleep(delay)
 
 
 def main():
@@ -15,6 +30,10 @@ def main():
     ap.add_argument("--max-steps", type=int, default=200)
     ap.add_argument("--check-only", action="store_true",
                     help="load the maze and report the A* optimum, then exit without training")
+    ap.add_argument("--animate", action="store_true",
+                    help="replay the trained agent's greedy path in the terminal")
+    ap.add_argument("--delay", type=float, default=0.2,
+                    help="seconds between animation frames (used with --animate)")
     args = ap.parse_args()
 
     if not os.path.exists(args.maze):
@@ -54,6 +73,12 @@ def main():
     print("final epsilon:", round(agent.epsilon, 4))
     print("final greedy path length:", final_length)
     print("matches optimal?", final_length == optimal)
+
+    if args.animate:
+        if final_path is None:
+            print("agent never reached the goal, nothing to animate")
+        else:
+            animate_path(env, final_path, args.delay)
 
     maze_name = os.path.splitext(os.path.basename(args.maze))[0]
     plot_steps(steps, optimal=optimal,
