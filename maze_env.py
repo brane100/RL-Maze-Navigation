@@ -76,12 +76,21 @@ class MazeEnv:
         print()
 
 def load_maze(path, max_steps=500):
+    with open(path, 'rb') as f:
+        raw = f.read()
+
+    if raw.startswith(b'\xff\xfe') or raw.startswith(b'\xfe\xff'):
+        text = raw.decode('utf-16')
+    elif raw.startswith(b'\xef\xbb\xbf'):
+        text = raw.decode('utf-8-sig')
+    else:
+        text = raw.decode('utf-8')
+
     rows = []
-    with open(path) as f:
-        for line in f:
-            cleaned = ''.join(ch for ch in line if not ch.isspace())
-            if cleaned:
-                rows.append(cleaned)
+    for line in text.splitlines():
+        cleaned = ''.join(ch for ch in line if not ch.isspace())
+        if cleaned:
+            rows.append(cleaned)
 
     width = len(rows[0])
     for i, row in enumerate(rows):
