@@ -1,8 +1,11 @@
 import random
 from collections import deque
+import copy
 
 import torch
 import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
 
 
 class QNetwork(nn.Module):
@@ -50,24 +53,152 @@ class ReplayBuffer:
     def __len__(self):
         return len(self.buffer)
 
+
+class DQNAgent:
+    """
+    DQN agent: a QNetwork trained with a replay buffer and a target network.
+
+    encode_fn: a function state -> list[float], turning a maze position
+    into whatever vector the network actually sees. Swappable on purpose —
+    this is exactly the choice the state-representation experiment tests.
+    """
+
+    def __init__(self, input_size, encode_fn, n_actions=4,
+                 lr=5e-3, gamma=0.95,
+                 epsilon=1.0, epsilon_decay=0.99, epsilon_min=0.05,
+                 buffer_capacity=10000, batch_size=64,
+                 target_update_freq=100):
+        self.encode_fn = encode_fn
+        self.n_actions = n_actions
+        self.gamma = gamma
+        self.epsilon = epsilon
+        self.epsilon_decay = epsilon_decay
+        self.epsilon_min = epsilon_min
+        self.batch_size = batch_size
+        self.target_update_freq = target_update_freq
+
+        self.policy_net = QNetwork(input_size, n_actions)
+        self.target_net = copy.deepcopy(self.policy_net)
+        self.target_net.load_state_dict(self.policy_net.state_dict())
+
+        self.optimizer = optim.Adam(self.policy_net.parameters(), lr=lr)
+        self.buffer = ReplayBuffer(capacity=buffer_capacity)
+        self.train_steps = 0
+
+    def choose_action(self, state):
+        if random.random() < self.epsilon:
+            return random.randrange(self.n_actions)
+        with torch.no_grad():
+            vec = torch.tensor(self.encode_fn(state), dtype=torch.float32)
+            q_values = self.policy_net(vec)
+            return int(torch.argmax(q_values).item())
+
+    def decay_epsilon(self):
+        self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
+
+    def train_step(self):
+        if len(self.buffer) < self.batch_size:
+            return  # not enough experience yet
+
+        states, actions, rewards, next_states, dones = self.buffer.sample(self.batch_size)
+
+        states = torch.tensor([self.encode_fn(s) for s in states], dtype=torch.float32)
+        next_states = torch.tensor([self.encode_fn(s) for s in next_states], dtype=torch.float32)
+        actions = torch.tensor(actions, dtype=torch.long)
+        rewards = torch.tensor(rewards, dtype=torch.float32)
+        dones = torch.tensor(dones, dtype=torch.float32)
+
+        q_values = self.policy_net(states)
+        q_selected = q_values.gather(1, actions.unsqueeze(1)).squeeze(1)
+
+        with torch.no_grad():
+            next_q = self.target_net(next_states)
+            max_next_q = next_q.max(dim=1).values
+            targets = rewards + self.gamma * max_next_q * (1.0 - dones)
+
+        loss = F.mse_loss(q_selected, targets)
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        self.train_steps += 1
+        if self.train_steps % self.target_update_freq == 0:
+            self.target_net.load_state_dict(self.policy_net.state_dict())
+
+        return loss.item()
+
+    def train(self, env, episodes=500):
+        reward_history = []
+        step_history = []
+
+        for ep in range(episodes):
+            state = env.reset()
+            total_reward = 0.0
+
+            while True:
+                action = self.choose_action(state)
+                next_state, reward, done, truncated = env.step(action)
+
+                self.buffer.push(state, action, reward, next_state, done)
+                self.train_step()
+
+                state = next_state
+                total_reward += reward
+
+                if done or truncated:
+                    break
+
+            self.decay_epsilon()
+            reward_history.append(total_reward)
+            step_history.append(env.steps)
+
+        return reward_history, step_history
+
+    def greedy_path(self, env, max_len=1000):
+        state = env.reset()
+        path = [state]
+        for _ in range(max_len):
+            with torch.no_grad():
+                vec = torch.tensor(self.encode_fn(state), dtype=torch.float32)
+                action = int(torch.argmax(self.policy_net(vec)).item())
+            state, reward, done, truncated = env.step(action)
+            path.append(state)
+            if done:
+                return path, len(path) - 1
+            if truncated:
+                break
+        return None, None
+
+
 if __name__ == "__main__":
-    input_size = 10  # placeholder — real size depends on state representation
+    import random
+    import torch
+    from maze_env import load_maze
+    from utils import astar, plot_steps
 
-    net = QNetwork(input_size=input_size, n_actions=4)
+    random.seed(3)
+    torch.manual_seed(3)
 
-    dummy_state = torch.zeros(input_size)
-    output = net(dummy_state)
-    print("single state output:", output)
-    print("output shape:", output.shape)
+    env = load_maze("mazes/maze_15x15.txt", max_steps=150)
+    print("free cells:", len(env.free_cells()))
 
-    batch = torch.zeros((32, input_size))
-    batch_output = net(batch)
-    print("batch output shape:", batch_output.shape)
+    _, optimal = astar(env)
+    print("A* optimal:", optimal)
 
-    buf = ReplayBuffer(capacity=100)
-    for i in range(50):
-        buf.push([0.0] * input_size, i % 4, -0.01, [0.0] * input_size, False)
-    print("buffer length:", len(buf))
+    def coord_encode(state):
+        r, c = state
+        return [r / (env.rows - 1), c / (env.cols - 1)]
 
-    states, actions, rewards, next_states, dones = buf.sample(16)
-    print("sampled batch sizes:", len(states), len(actions), len(rewards))
+    agent = DQNAgent(input_size=2, encode_fn=coord_encode, epsilon_decay=0.99)
+    rewards, steps = agent.train(env, episodes=400)
+
+    print("first 5 episodes:", steps[:5])
+    print("last 15 episodes:", steps[-15:])
+
+    path, length = agent.greedy_path(env)
+    print("greedy path length:", length)
+
+    plot_steps(steps, optimal=optimal,
+               title="DQN with (row, col) coordinate input",
+               filename="results/dqn_coord_encoding.png")
