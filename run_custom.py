@@ -1,12 +1,15 @@
 import argparse
 import os
+import random
 import sys
 import time
+
+import torch
 
 from maze_env import load_maze
 from q_learning import QLearningAgent
 from dqn import DQNAgent
-from utils import astar, plot_steps, plot_rewards
+from utils import astar, compute_max_steps, plot_steps, plot_rewards
 
 
 # ANSI color codes. Nothing fancy, just enough to tell the pieces apart.
@@ -142,19 +145,57 @@ def train_with_display(env, agent, episodes, show_every, delay):
 
 
 def coord_encode_fn(env):
-    """(row, col) -> a 0..1 scaled vector, the input DQNAgent's network sees."""
+    """
+    (row, col) -> a 0..1 scaled 2-value vector.
+
+    Compact, but it bakes in the assumption that cells with similar
+    coordinates have similar values. That's exactly what's false either
+    side of a wall: two cells one step apart on the grid can be a long
+    way apart in the maze.
+
+    Returns (encode_fn, input_size) so it's interchangeable with the
+    one-hot factory below.
+    """
     def encode(state):
         r, c = state
         return [r / (env.rows - 1), c / (env.cols - 1)]
-    return encode
+    return encode, 2
+
+
+def make_onehot_encode_fn(env):
+    """
+    Returns an encode function that maps each free cell to its own
+    dedicated input dimension. Unlike coord_encode, this carries no
+    assumption that geometrically nearby cells have similar values -
+    which is the assumption that breaks near walls.
+
+    Made this a factory because, unlike coord_encode, it needs the maze's
+    free-cell list baked in at creation time: the input size itself
+    depends on the maze.
+    """
+    free_cells = env.free_cells()
+    cell_to_index = {cell: i for i, cell in enumerate(free_cells)}
+    n_free = len(free_cells)
+
+    def onehot_encode(state):
+        vec = [0.0] * n_free
+        vec[cell_to_index[state]] = 1.0
+        return vec
+
+    return onehot_encode, n_free
 
 
 def main():
     ap = argparse.ArgumentParser(description="Train an RL agent on a custom maze file.")
     ap.add_argument("--maze", required=True)
     ap.add_argument("--agent", choices=["q", "dqn"], default="q")
+    ap.add_argument("--encoding", choices=["coord", "onehot"], default="coord",
+                    help="how DQN sees a state; ignored by --agent q")
     ap.add_argument("--episodes", type=int, default=1000)
-    ap.add_argument("--max-steps", type=int, default=200)
+    ap.add_argument("--seed", type=int, default=None,
+                    help="seed random + torch so two runs are comparable")
+    ap.add_argument("--max-steps", type=int, default=None,
+                    help="override the computed max_steps; omit to auto-scale from A*")
     ap.add_argument("--check-only", action="store_true",
                     help="load the maze and report the A* optimum, then exit without training")
     ap.add_argument("--animate", action="store_true",
@@ -175,8 +216,13 @@ def main():
 
     os.makedirs("results", exist_ok=True)
 
+    if args.seed is not None:
+        random.seed(args.seed)
+        torch.manual_seed(args.seed)
+
     try:
-        env = load_maze(args.maze, max_steps=args.max_steps)
+        # real step budget gets set below, once we know the optimal length
+        env = load_maze(args.maze, max_steps=1)
     except ValueError as e:
         print(f"Failed to load maze: {e}")
         sys.exit(1)
@@ -186,14 +232,26 @@ def main():
     _, optimal = astar(env)
     print("A* optimal:", optimal)
 
+    if optimal is None:
+        print("UNSOLVABLE")
+        sys.exit(1)
+
     if args.check_only:
-        if optimal is None:
-            print("UNSOLVABLE")
-            sys.exit(1)
         return
 
+    if args.max_steps is not None:
+        env.max_steps = args.max_steps
+    else:
+        env.max_steps = compute_max_steps(env)
+    print(f"using max_steps={env.max_steps} (ratio {env.max_steps / optimal:.1f}x optimal)")
+
     if args.agent == "dqn":
-        agent = DQNAgent(input_size=2, encode_fn=coord_encode_fn(env), epsilon_decay=0.99)
+        if args.encoding == "coord":
+            encode_fn, input_size = coord_encode_fn(env)
+        else:
+            encode_fn, input_size = make_onehot_encode_fn(env)
+        print(f"encoding: {args.encoding} (input_size={input_size})")
+        agent = DQNAgent(input_size=input_size, encode_fn=encode_fn, epsilon_decay=0.99)
     else:
         agent = QLearningAgent()
 
@@ -217,12 +275,15 @@ def main():
             animate_path(env, final_path, args.delay)
 
     maze_name = os.path.splitext(os.path.basename(args.maze))[0]
+    # tag the run so a coord run and a onehot run on the same maze don't
+    # end up fighting over the same filename
+    tag = args.agent if args.agent == "q" else f"dqn_{args.encoding}"
     plot_steps(steps, optimal=optimal,
-               title=f"Steps to goal per episode ({maze_name})",
-               filename=f"results/{maze_name}_steps.png", window=50)
+               title=f"Steps to goal per episode ({maze_name}, {tag})",
+               filename=f"results/{maze_name}_{tag}_steps.png", window=50)
     plot_rewards(rewards,
-                 title=f"Total reward per episode ({maze_name})",
-                 filename=f"results/{maze_name}_rewards.png", window=50)
+                 title=f"Total reward per episode ({maze_name}, {tag})",
+                 filename=f"results/{maze_name}_{tag}_rewards.png", window=50)
 
 
 if __name__ == "__main__":
