@@ -57,8 +57,15 @@ class QLearningAgent:
     def decay_epsilon(self):
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
 
-    def train(self, env, episodes=1000):
-        """Run many episodes, learning as it goes. Returns per-episode logs."""
+    def train(self, env, episodes=1000, on_step=None):
+        """
+        Run many episodes, learning as it goes. Returns per-episode logs.
+
+        on_step, if given, gets called after every environment step as
+        on_step(episode, env) - lets a caller (e.g. a CLI display) watch
+        training happen without this method needing to know anything
+        about rendering.
+        """
         reward_history = []
         step_history = []
 
@@ -74,6 +81,9 @@ class QLearningAgent:
 
                 state = next_state
                 total_reward += reward
+
+                if on_step is not None:
+                    on_step(episode, env)
 
                 if done or truncated:
                     break

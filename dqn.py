@@ -64,10 +64,11 @@ class DQNAgent:
     """
 
     def __init__(self, input_size, encode_fn, n_actions=4,
-                 lr=5e-3, gamma=0.95,
-                 epsilon=1.0, epsilon_decay=0.99, epsilon_min=0.05,
-                 buffer_capacity=10000, batch_size=64,
-                 target_update_freq=100):
+             lr=5e-3, gamma=0.95,
+             epsilon=1.0, epsilon_decay=0.99, epsilon_min=0.05,
+             buffer_capacity=10000, batch_size=64,
+             target_update_freq=100,
+             reward_clip=1.0, lr_decay=0.999):
         self.encode_fn = encode_fn
         self.n_actions = n_actions
         self.gamma = gamma
@@ -76,12 +77,14 @@ class DQNAgent:
         self.epsilon_min = epsilon_min
         self.batch_size = batch_size
         self.target_update_freq = target_update_freq
+        self.reward_clip = reward_clip
 
         self.policy_net = QNetwork(input_size, n_actions)
         self.target_net = copy.deepcopy(self.policy_net)
         self.target_net.load_state_dict(self.policy_net.state_dict())
 
         self.optimizer = optim.Adam(self.policy_net.parameters(), lr=lr)
+        self.scheduler = optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=lr_decay)
         self.buffer = ReplayBuffer(capacity=buffer_capacity)
         self.train_steps = 0
 
@@ -120,6 +123,7 @@ class DQNAgent:
 
         self.optimizer.zero_grad()
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.policy_net.parameters(), max_norm=1.0)
         self.optimizer.step()
 
         self.train_steps += 1
@@ -128,7 +132,13 @@ class DQNAgent:
 
         return loss.item()
 
-    def train(self, env, episodes=500):
+    def train(self, env, episodes=500, on_step=None):
+        """
+        on_step, if given, gets called after every environment step as
+        on_step(episode, env) - lets a caller (e.g. a CLI display) watch
+        training happen without this method needing to know anything
+        about rendering.
+        """
         reward_history = []
         step_history = []
 
@@ -140,16 +150,21 @@ class DQNAgent:
                 action = self.choose_action(state)
                 next_state, reward, done, truncated = env.step(action)
 
-                self.buffer.push(state, action, reward, next_state, done)
+                clipped_reward = max(-self.reward_clip, min(self.reward_clip, reward))
+                self.buffer.push(state, action, clipped_reward, next_state, done)
                 self.train_step()
 
                 state = next_state
-                total_reward += reward
+                total_reward += reward   # log the TRUE reward, not the clipped one
+
+                if on_step is not None:
+                    on_step(ep, env)
 
                 if done or truncated:
                     break
 
             self.decay_epsilon()
+            self.scheduler.step()
             reward_history.append(total_reward)
             step_history.append(env.steps)
 
@@ -180,7 +195,7 @@ if __name__ == "__main__":
     random.seed(3)
     torch.manual_seed(3)
 
-    env = load_maze("mazes/maze_15x15.txt", max_steps=150)
+    env = load_maze("mazes/maze_10x10_.txt", max_steps=150)
     print("free cells:", len(env.free_cells()))
 
     _, optimal = astar(env)

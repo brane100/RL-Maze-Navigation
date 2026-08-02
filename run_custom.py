@@ -5,6 +5,7 @@ import time
 
 from maze_env import load_maze
 from q_learning import QLearningAgent
+from dqn import DQNAgent
 from utils import astar, plot_steps, plot_rewards
 
 
@@ -117,42 +118,35 @@ class TrainingDisplay:
 
 def train_with_display(env, agent, episodes, show_every, delay):
     """
-    Basically a copy of QLearningAgent.train(), except it calls the
-    display every so often so we can see episodes happening live.
-    Didn't want to touch q_learning.py itself since that file is
-    supposed to be the "pure" agent logic.
+    Runs agent.train() and watches it happen, whichever agent it is.
+    Both QLearningAgent and DQNAgent take an on_step(episode, env) hook now,
+    called after every environment step - so this doesn't need its own copy
+    of the episode loop, it just tracks the visited trail and asks the
+    display to draw every show_every-th episode.
     """
     display = TrainingDisplay(env, delay)
+    visited = set()
+    state = {"episode": -1}
 
-    reward_history = []
-    step_history = []
+    def on_step(episode, env):
+        if episode != state["episode"]:
+            state["episode"] = episode
+            visited.clear()
 
-    for episode in range(episodes):
-        state = env.reset()
-        total_reward = 0.0
-        show_this_one = episode % show_every == 0 or episode == episodes - 1
-        visited = {state}
+        visited.add(env.agent_pos)
 
-        while True:
-            action = agent.choose_action(state)
-            next_state, reward, done, truncated = env.step(action)
-            agent.update(state, action, reward, next_state, done)
+        if episode % show_every == 0 or episode == episodes - 1:
+            display.draw(episode, episodes, env.steps, visited)
 
-            state = next_state
-            total_reward += reward
-            visited.add(state)
+    return agent.train(env, episodes=episodes, on_step=on_step)
 
-            if show_this_one:
-                display.draw(episode, episodes, env.steps, visited)
 
-            if done or truncated:
-                break
-
-        agent.decay_epsilon()
-        reward_history.append(total_reward)
-        step_history.append(env.steps)
-
-    return reward_history, step_history
+def coord_encode_fn(env):
+    """(row, col) -> a 0..1 scaled vector, the input DQNAgent's network sees."""
+    def encode(state):
+        r, c = state
+        return [r / (env.rows - 1), c / (env.cols - 1)]
+    return encode
 
 
 def main():
@@ -179,10 +173,6 @@ def main():
         print(f"Maze file not found: {args.maze}")
         sys.exit(1)
 
-    if args.agent == "dqn":
-        print("--agent dqn is not implemented yet")
-        sys.exit(1)
-
     os.makedirs("results", exist_ok=True)
 
     try:
@@ -202,7 +192,10 @@ def main():
             sys.exit(1)
         return
 
-    agent = QLearningAgent()
+    if args.agent == "dqn":
+        agent = DQNAgent(input_size=2, encode_fn=coord_encode_fn(env), epsilon_decay=0.99)
+    else:
+        agent = QLearningAgent()
 
     if args.show_training:
         rewards, steps = train_with_display(env, agent, args.episodes, args.show_every, args.delay)
