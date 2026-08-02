@@ -94,6 +94,24 @@ def build_path(came_from, goal):
     path.reverse()
     return path, len(path) - 1  # number of cells minus 1 = number of moves
 
+
+def compute_max_steps(env, multiplier=5, minimum=100):
+    """
+    A fixed max_steps silently breaks on any maze where the optimal path
+    is longer than the budget - the agent can never reach the goal, so it
+    never sees the reward signal to learn from. Scale the budget to the
+    maze's own difficulty instead of guessing a constant.
+
+    multiplier=5 means the agent gets 5x the optimal path length to find
+    the goal while it's still exploring randomly. Anything under about 3x
+    tends to truncate every early episode.
+    """
+    _, optimal = astar(env)
+    if optimal is None:
+        raise ValueError("maze has no solution - check the file")
+    return max(minimum, optimal * multiplier)
+
+
 if __name__ == "__main__":
     from maze_env import MazeEnv
 
