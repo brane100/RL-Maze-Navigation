@@ -242,7 +242,17 @@ def main():
     if args.max_steps is not None:
         env.max_steps = args.max_steps
     else:
-        env.max_steps = compute_max_steps(env)
+        # DQN explores less efficiently than tabular Q-learning early on:
+        # Q-learning's zero-initialized table makes every unvisited cell
+        # look better than visited ones, so it's biased toward the
+        # frontier. A shared-weight network has no per-state memory like
+        # that, so early on it's close to a random walk. 5x optimal is
+        # enough budget for Q-learning but starved DQN in testing, at 5x
+        # it never reached the goal once in 400 episodes on an 8x8 maze;
+        # 12x was enough headroom for it to stumble into the goal early
+        # enough to start learning from real reward signal.
+        multiplier = 12 if args.agent == "dqn" else 5
+        env.max_steps = compute_max_steps(env, multiplier=multiplier)
     print(f"using max_steps={env.max_steps} (ratio {env.max_steps / optimal:.1f}x optimal)")
 
     if args.agent == "dqn":
